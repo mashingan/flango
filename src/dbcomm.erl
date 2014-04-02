@@ -1,4 +1,4 @@
--module(testserv_genserv).
+-module(dbcomm).
 -behaviour(gen_server).
 
 -export([start_link/1, init/1, handle_call/3, handle_cast/2,
@@ -16,7 +16,7 @@ handle_call(_Req, _From, State) ->
 
 handle_cast(accept, Listen) ->
     {ok, Accept} = gen_tcp:accept(Listen),
-    testserv_sup:start_socket(),
+    dbcomm_sup:start_socket(),
     {noreply, Accept};
 handle_cast(close, Socket) ->
     gen_tcp:close(Socket),
@@ -27,8 +27,12 @@ handle_info({tcp, _Socket, <<"quit",_/binary>>}, State) ->
     {noreply, State};
 handle_info({tcp, Socket, Msg}, Socket) ->
     inet:setopts(Socket, [{active,once}]),
+    {LDecMsg} = jiffy:decode(Msg),
+    lists:foreach(fun({Key, Val}) -> io:format("Key: ~p, Val: ~p~n",
+                                           [Key, Val]) end,
+              LDecMsg),
     io:format("Msg: ~s~n",[Msg]),
-    gen_tcp:send(Socket, Msg),
+    gen_tcp:send(Socket, jiffy:encode({LDecMsg})),
     {noreply, Socket}.
 
 code_change(_OldVsn, State, _Extra) ->

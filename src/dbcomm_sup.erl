@@ -1,4 +1,4 @@
--module(testserv_sup).
+-module(dbcomm_sup).
 -behaviour(supervisor).
 
 -export([start_link/1, start_socket/0, terminate/0]).
@@ -12,8 +12,8 @@ init([Port]) ->
     spawn_link(fun empty_listener/0),
     {ok, {{simple_one_for_one, 60, 3600},
           [{socket,
-            {testserv_genserv, start_link, [Listen]},
-            temporary, 1000, worker, [testserv_genserv]}
+            {dbcomm, start_link, [Listen]},
+            temporary, 1000, worker, [dbcomm]}
           ]}}.
 
 start_socket() ->
