@@ -6,7 +6,9 @@ csv(F) ->
 
 csv(F, Var) ->
     {ok, FD} = file:open(F, Var),
-    split(read(FD)).
+    Lines = split(read(FD)),
+    file:close(FD),
+    Lines.
 
 read(FD) ->
     case file:read_line(FD) of
