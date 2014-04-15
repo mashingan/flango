@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% external API identifier %%
--export([add/1, remove/1, listall/0, read/1, read/2]).
+-export([add/1, remove/1, listall/0, read/1, read/2, reset/0]).
 
 %% application API, only invoked once %%
 -export([do_once/0]).
@@ -16,19 +16,19 @@
 -record(dbquest, {id, question, choices, answer, file}).
 
 add(L) ->
-    gen_server:call({add, L}).
+    gen_server:call(?MODULE, {add, L}).
 
 remove(Id) ->
-    gen_server:call({remove, Id}).
+    gen_server:call(?MODULE, {remove, Id}).
 
 listall() ->
-    gen_server:cast(self(), list).
+    gen_server:call(?MODULE, list).
 
 read(Id) ->
-    gen_server:cast(self(), {read, Id}).
+    gen_server:call(?MODULE, {read, Id}).
 
 read(Id, Field) ->
-    gen_server:cast(self(), {read, Id, Field}).
+    gen_server:call(?MODULE, {read, Id, Field}).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -53,18 +53,18 @@ handle_call({remove, Id}, _From, State) ->
                 _ ->
                     "Incorrect argument, use Id"
             end,
-    {reply, Reply, State}.
-
-%%handle_cast(_Msg, State) -> {noreply, State}.
-handle_cast(list, State) ->
+    {reply, Reply, State};
+handle_call(list, _From, State) ->
     Reply = read_db(),
     {reply, Reply, State};
-handle_cast({read, Id}, State) ->
+handle_call({read, Id}, _From, State) ->
     Reply = querydb(Id),
     {reply, Reply, State};
-handle_cast({read, Id, Field}, State) ->
+handle_call({read, Id, Field}, _From, State) ->
     Reply = querydb(Id, Field),
     {reply, Reply, State}.
+
+handle_cast(_Msg, State) -> {noreply, State}.
 
 handle_info(_Info, State) -> {noreply, State}.
 
@@ -85,6 +85,9 @@ do_once() ->
 start() ->
     mnesia:start(),
     mnesia:wait_for_tables([dbquest], 10000).
+
+reset() ->
+    lists:foreach(fun(X) -> add(X) end, csv:csv("test/testcsv.csv")).
 
 do(Q) ->
     F = fun() -> qlc:e(Q) end,
