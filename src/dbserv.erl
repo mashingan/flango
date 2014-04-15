@@ -79,7 +79,10 @@ do_once() ->
     mnesia:create_schema([node()]),
     mnesia:start(),
     mnesia:create_table(dbquest, [{attributes,
-                                   record_info(fields, dbquest)}]),
+                                   record_info(fields, dbquest)},
+                                  {type, set},
+                                  {disc_copies, [node()]}
+                                 ]),
     mnesia:stop().
 
 start() ->
