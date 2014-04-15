@@ -90,6 +90,7 @@ start() ->
     mnesia:wait_for_tables([dbquest], 10000).
 
 reset() ->
+    mnesia:clear_table(dbquest),
     lists:foreach(fun(X) -> add(X) end, csv:csv("test/testcsv.csv")).
 
 do(Q) ->
