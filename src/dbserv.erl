@@ -2,7 +2,8 @@
 -behaviour(gen_server).
 
 %% external API identifier %%
--export([add/1, remove/1, listall/0, read/1, read/2, reset/0]).
+-export([add/1, remove/1, listall/0, read/1, read/2, reset/0,
+        fetch/1, r2plist/1]).
 
 %% application API, only invoked once %%
 -export([do_once/0]).
@@ -24,6 +25,9 @@ remove(Id) ->
 listall() ->
     gen_server:call(?MODULE, list).
 
+fetch(N) ->
+    gen_server:call(?MODULE, {fetch, N}).
+
 read(Id) ->
     gen_server:call(?MODULE, {read, Id}).
 
@@ -31,21 +35,17 @@ read(Id, Field) ->
     gen_server:call(?MODULE, {read, Id, Field}).
 
 start_link() ->
+    %gen_server:start_link(?MODULE, [], []).
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) -> 
     start(),
-    {ok, []}. % Actually state but using empty list
+    {ok, lists:map(fun(X) -> X#dbquest.id end, read_db())}.
 
-%%handle_call(_Request, _From, State) -> {reply, Reply,  State}.
-handle_call({add, L}, _From, State) ->
-    Reply = case add_question(L) of
-                {atomic, _Val} ->
-                    ok;
-                _ ->
-                    "Incorrect argument, use list"
-            end,
-    {reply, Reply,  State};
+handle_call({add, L}, _From, IdList) ->
+    {ok, NewContent} = add_question(L),
+    IdsList = [NewContent#dbquest.id | IdList],
+    {reply, ok, IdsList};
 handle_call({remove, Id}, _From, State) ->
     Reply = case remove_question(Id) of
                 {atomic, _Val} ->
@@ -53,15 +53,18 @@ handle_call({remove, Id}, _From, State) ->
                 _ ->
                     "Incorrect argument, use Id"
             end,
+    {reply, Reply, lists:delete(Id, State)};
+handle_call({fetch, N}, _From, State) ->
+    Reply = fetching(N, State),
     {reply, Reply, State};
 handle_call(list, _From, State) ->
     Reply = read_db(),
     {reply, Reply, State};
 handle_call({read, Id}, _From, State) ->
-    Reply = querydb(Id),
+    [Reply] = querydb(Id),
     {reply, Reply, State};
 handle_call({read, Id, Field}, _From, State) ->
-    Reply = querydb(Id, Field),
+    [Reply] = querydb(Id, Field),
     {reply, Reply, State}.
 
 handle_cast(_Msg, State) -> {noreply, State}.
@@ -91,7 +94,7 @@ start() ->
 
 reset() ->
     mnesia:clear_table(dbquest),
-    lists:foreach(fun(X) -> add(X) end, csv:csv("test/testcsv.csv")).
+    lists:foreach(fun(X) -> add(X) end, csv:csv("test/test.csv")).
 
 do(Q) ->
     F = fun() -> qlc:e(Q) end,
@@ -106,11 +109,26 @@ add_question(L) ->
                    answer=A,
                    file=File},
     F = fun() -> mnesia:write(Row) end,
-    mnesia:transaction(F).
+    {atomic, _Val} = mnesia:transaction(F),
+    {ok, Row}.
 
 remove_question(Id) ->
     F = fun() -> mnesia:delete({dbquest, Id}) end,
     mnesia:transaction(F).
+
+fetching(N, IdsList) ->
+    fetching(N, length(IdsList), IdsList, []).
+
+fetching(N, M, IdsList, Res) when N > 0 ->
+    NewFetch = lists:nth(random:uniform(M), IdsList),
+    case lists:member(NewFetch, Res) of
+        true ->
+            fetching(N, M, IdsList, Res);
+        false ->
+            fetching(N-1, M, IdsList, [NewFetch|Res])
+    end;
+fetching(0, _, _, Res) ->
+    Res.
 
 read_db() ->
     do(qlc:q([X || X <- mnesia:table(dbquest)])).
@@ -128,3 +146,15 @@ querydb(Id, answer) ->
 querydb(Id, file) ->
     do(qlc:q([X#dbquest.file || X <- mnesia:table(dbquest),
                                 X#dbquest.id =:= Id])).
+
+r2plist(Rec) ->
+    lists:zip(record_info(fields, dbquest),
+              lists:map(fun r2helper/1,
+                        tl(tuple_to_list(Rec)))).
+
+r2helper(X) when is_list(X)  ->
+    case io_lib:printable_list(X) of
+        true  -> list_to_binary(X);
+        false -> lists:map(fun r2helper/1, X)
+    end;
+r2helper(X) -> X.
