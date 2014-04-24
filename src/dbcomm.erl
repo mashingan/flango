@@ -25,14 +25,19 @@ handle_cast(close, Socket) ->
 handle_info({tcp, _Socket, <<"quit",_/binary>>}, State) ->
     gen_server:cast(self(), close),
     {noreply, State};
-handle_info({tcp, Socket, Msg}, Socket) ->
+handle_info({tcp, Socket, <<"fetch", N/binary>>}, Socket) ->
     inet:setopts(Socket, [{active,once}]),
-    {LDecMsg} = jiffy:decode(Msg),
-    lists:foreach(fun({Key, Val}) -> io:format("Key: ~p, Val: ~p~n",
-                                           [Key, Val]) end,
-              LDecMsg),
-    io:format("Msg: ~s~n",[Msg]),
-    gen_tcp:send(Socket, jiffy:encode({LDecMsg})),
+    lists:foreach(fun(JSON) -> 
+                          gen_tcp:send(Socket, JSON),
+                          gen_tcp:send(Socket, "\n") end,
+                  dbserv:json2sent(binary_to_integer(N))),
+    {noreply, Socket};
+handle_info({tcp, Socket, Msg}, Socket) ->
+    inet:setopts(Socket, [{active, once}]),
+    io:format("Msg: ~s~n", [Msg]),
+    {noreply, Socket};
+handle_info({tcp_closed, Socket}, Socket) ->
+    gen_server:cast(self(), close),
     {noreply, Socket}.
 
 code_change(_OldVsn, State, _Extra) ->

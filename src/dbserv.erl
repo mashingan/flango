@@ -3,7 +3,7 @@
 
 %% external API identifier %%
 -export([add/1, remove/1, listall/0, read/1, read/2, reset/0,
-        fetch/1, r2plist/1]).
+        fetch/1, r2plist/1, json2sent/1]).
 
 %% application API, only invoked once %%
 -export([do_once/0]).
@@ -158,3 +158,7 @@ r2helper(X) when is_list(X)  ->
         false -> lists:map(fun r2helper/1, X)
     end;
 r2helper(X) -> X.
+
+json2sent(N) ->
+    lists:map(fun(X) -> jiffy:encode({r2plist(read(X))}) end,
+              fetch(N)).
